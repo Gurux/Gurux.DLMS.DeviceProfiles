@@ -1,0 +1,78 @@
+name: Validate and publish device profile index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.json'
+      - scripts/**
+      - tests/**
+      - .github/workflows/publish-device-profiles.yml
+  pull_request:
+    paths:
+      - '**/*.json'
+      - scripts/**
+      - tests/**
+      - .github/workflows/publish-device-profiles.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: device-profiles-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Validate profiles and build index
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      INTERFACE_TYPES_SOURCE: ${{ runner.temp }}/InterfaceType.cs
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Fetch and validate official InterfaceType enum
+        run: python3 scripts/interface_types.py --download-to "$INTERFACE_TYPES_SOURCE"
+      - name: Test generator
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Validate all profiles
+        run: python3 scripts/validate_profiles.py --root . --policy validation-policy.json
+      - name: Generate index
+        shell: bash
+        run: |
+          python3 scripts/build_manufacturers_index.py --root . --output _site/manufacturers.json
+          python3 -m json.tool _site/manufacturers.json > /dev/null
+          touch _site/.nojekyll
+      - name: Upload index for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: manufacturers-index
+          path: _site/manufacturers.json
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy index
+        id: deployment
+        uses: actions/deploy-pages@v4

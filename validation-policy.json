@@ -1,0 +1,12 @@
+{
+  "maxFileBytes": 5242880,
+  "maxDepth": 32,
+  "maxNodes": 100000,
+  "maxArrayItems": 10000,
+  "maxObjectProperties": 10000,
+  "maxStringLength": 65536,
+  "maxFormulaLength": 256,
+  "maxFormulaNodes": 64,
+  "formulaVariables": ["SN"],
+  "allowedProfileFields": null
+}
