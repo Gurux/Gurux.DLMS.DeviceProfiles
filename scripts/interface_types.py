@@ -38,7 +38,7 @@ def load_interfaces(path=None):
 
 def check_path(parts, interfaces):
     if len(parts) not in (4, 5):
-        raise ValueError('Expected manufacturer/model/InterfaceType/[variant]/profile.json')
+        raise ValueError('Expected manufacturer/model/InterfaceType/[variant]/profile.json or profile.gxc')
     interface = parts[2]
     if interface not in interfaces:
         raise ValueError(f'Invalid InterfaceType directory {interface!r}; use an exact enum name')

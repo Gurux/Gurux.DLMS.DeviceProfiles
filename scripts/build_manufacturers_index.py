@@ -22,7 +22,7 @@ def read_object(path):
     return value
 
 
-def generate(root, repository, commit, prefix=''):
+def generate(root, repository, commit, prefix='', rules=None):
     root = Path(root).resolve()
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository):
         raise ValueError('repository must be owner/name')
@@ -37,7 +37,7 @@ def generate(root, repository, commit, prefix=''):
         rel = path.relative_to(root)
         if any(p.startswith('.') or p in EXCLUDED for p in rel.parts):
             continue
-        if path.suffix.lower() != '.json' or path.name.lower().endswith('.meta.json'):
+        if path.suffix.lower() not in ('.json', '.gxc') or path.name.lower().endswith('.meta.json'):
             continue
         # Root-level JSON files are not profiles (e.g. an existing index).
         if len(rel.parts) == 1:
@@ -47,8 +47,8 @@ def generate(root, repository, commit, prefix=''):
         if not path.is_file():
             continue
         interface = check_path(rel.parts, interfaces)
-        profile = read_object(path)
-        check_content(profile, interface, interfaces)
+        from xml_profiles import read_profile
+        profile, profile_format = read_profile(path, interface, interfaces, rules)
         metadata_path = path.with_suffix('.meta.json')
         if metadata_path.is_symlink():
             raise ValueError(f'Symlink metadata is not supported: {rel}')
@@ -66,7 +66,7 @@ def generate(root, repository, commit, prefix=''):
         setting = {
             'Id': identifier, 'Name': name,
             'Location': f'https://raw.githubusercontent.com/{repository}/{commit}/{quote(relative_url, safe="/")}',
-            'Sha256': hashlib.sha256(raw).hexdigest(), 'Size': len(raw)
+            'Sha256': hashlib.sha256(raw).hexdigest(), 'Size': len(raw), 'Format': profile_format
         }
         if 'Revision' in metadata:
             if not isinstance(metadata['Revision'], str):
@@ -98,13 +98,16 @@ def main():
     parser.add_argument('--output', default='_site/manufacturers.json')
     parser.add_argument('--repository', default=os.environ.get('GITHUB_REPOSITORY', 'Gurux/Gurux.DLMS.DeviceProfiles'))
     parser.add_argument('--commit', default=os.environ.get('GITHUB_SHA'))
+    parser.add_argument('--policy', default='validation-policy.json')
     args = parser.parse_args()
     commit = args.commit or subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
     repo_root = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip()).resolve()
     prefix = Path(args.root).resolve().relative_to(repo_root).as_posix()
     if prefix == '.':
         prefix = ''
-    index = generate(args.root, args.repository, commit, prefix)
+    from validate_profiles import policy, validate_file
+    rules = policy(validate_file(args.policy))
+    index = generate(args.root, args.repository, commit, prefix, rules)
     destination = Path(args.output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix('.tmp')

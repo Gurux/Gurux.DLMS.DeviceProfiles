@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - '**/*.json'
+      - '**/*.gxc'
       - scripts/**
       - tests/**
       - .github/workflows/publish-device-profiles.yml
   pull_request:
     paths:
       - '**/*.json'
+      - '**/*.gxc'
       - scripts/**
       - tests/**
       - .github/workflows/publish-device-profiles.yml

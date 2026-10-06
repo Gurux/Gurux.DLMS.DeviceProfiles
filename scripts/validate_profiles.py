@@ -152,15 +152,19 @@ def main():
         relative = path.relative_to(root)
         if any(p.startswith('.') or p in EXCLUDED for p in relative.parts):
             continue
-        if path.suffix.lower() != '.json' or len(relative.parts) == 1:
+        if path.suffix.lower() not in ('.json', '.gxc') or len(relative.parts) == 1:
             continue
         try:
             if any(p.is_symlink() for p in (path, *path.parents) if p != root):
                 raise ValidationError('Symlink profiles are not allowed')
             interface = check_path(relative.parts, interfaces)
             metadata = path.name.lower().endswith('.meta.json')
-            value = validate_file(path, rules, metadata=metadata)
-            check_content(value.get('Settings', {}) if metadata else value, interface, interfaces)
+            if metadata:
+                value = validate_file(path, rules, metadata=True)
+                check_content(value.get('Settings', {}), interface, interfaces)
+            else:
+                from xml_profiles import read_profile
+                read_profile(path, interface, interfaces, rules)
             count += 1
         except (ValueError, OSError) as error:
             failures.append(f'{relative.as_posix()}: {error}')
@@ -168,7 +172,7 @@ def main():
         for failure in failures:
             print(failure, file=sys.stderr)
         return 1
-    print(f'Validated {count} profile/metadata JSON files')
+    print(f'Validated {count} profile/metadata files (JSON or GXC/XML)')
     return 0
 
 
